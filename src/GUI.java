@@ -1,201 +1,261 @@
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.text.BadLocationException;
 import java.awt.*;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
+import java.awt.event.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
-//import java.util.Stack;
+
+import static javax.swing.JOptionPane.*;
 
 public class GUI extends JFrame {
     
-    StackUsingLL<String> wordStack = new StackUsingLL<>();
+    File wordsFile = new File("final_merged_frequencies.txt");
+    Path path = Paths.get(wordsFile.getPath());
+    
     String prefix = new String("");
     private JTextArea textArea;
     private JTabbedPane tabbedPane;
     Trie trie;
+    JButton openBtn, saveBtn;
     private JPopupMenu suggestionPopup;
+    private JPopupMenu actionPopup;
+    private StackUsingArray<Operation> undoStack = new StackUsingArray<>();
+    private StackUsingArray<Operation> redoStack = new StackUsingArray<>();
+    
+    JFileChooser fileChooser;
+    
     private JList<String> suggestionList;
     private DefaultListModel<String> listModel;
+    JPanel homePanel;
     
     
     void setTrie(Trie t){
         trie = t;
     }
     
-    public GUI() {
+    public GUI(Trie t) {
+        trie = t;
         // Set up the main frame
-        setTitle("Word-Like Interface");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setTitle("Muhammad's Editor");
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(800, 600));
-        
-        // Create menu bar
-        createMenuBar();
+        setLayout(new BorderLayout(20,10));
         
         // Create main content panel with border layout
         JPanel mainPanel = new JPanel(new BorderLayout());
         
-        // Create tabbed pane
-        tabbedPane = new JTabbedPane();
-        tabbedPane.addTab("Home", createHomePanel());
-        tabbedPane.addTab("Insert", createInsertPanel());
-        tabbedPane.addTab("Layout", createLayoutPanel());
-        
-        mainPanel.add(tabbedPane, BorderLayout.NORTH);
-        
         // Create text area with padding
         textArea = new JTextArea();
-        textArea.setFont(new Font("Times New Roman", Font.PLAIN, 14));
+        textArea.setFont(new Font("Times New Roman", Font.PLAIN, 16));
         textArea.setLineWrap(true);
         textArea.setWrapStyleWord(true);
         createSuggestions();
         
         // Add padding to text area using a border
-        textArea.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        textArea.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        
+        add(createHomePanel(), BorderLayout.NORTH);
         
         // Add scroll pane for text area
         JScrollPane scrollPane = new JScrollPane(textArea);
         mainPanel.add(scrollPane, BorderLayout.CENTER);
         
         // Add main panel to frame
-        add(mainPanel);
+        add(mainPanel, BorderLayout.CENTER);
+        
+        createActionPopup();
+        addTextSelectionListener();
         
         pack();
         setLocationRelativeTo(null);
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e){
+                confirmationDialogue();
+            }
+        });
     }
     
-    private void createMenuBar() {
-        JMenuBar menuBar = new JMenuBar();
+    private void confirmationDialogue() {
         
-        // File menu
-        JMenu fileMenu = new JMenu("File");
-        fileMenu.add(new JMenuItem("New"));
-        fileMenu.add(new JMenuItem("Open"));
-        fileMenu.add(new JMenuItem("Save"));
-        fileMenu.addSeparator();
-        fileMenu.add(new JMenuItem("Exit"));
+        if(textArea.getText().trim().isEmpty())
+            System.exit(0);
         
-        // Edit menu
-        JMenu editMenu = new JMenu("Edit");
-        editMenu.add(new JMenuItem("Cut"));
-        editMenu.add(new JMenuItem("Copy"));
-        editMenu.add(new JMenuItem("Paste"));
+        int result = JOptionPane.showOptionDialog(this, "Do you want to save your work?", "Confirmation Box",
+                YES_NO_CANCEL_OPTION, WARNING_MESSAGE, null, new String[]{"Save", "Don't Save", "Cancel"}, null);
         
-        // View menu
-        JMenu viewMenu = new JMenu("View");
-        viewMenu.add(new JCheckBoxMenuItem("Ruler"));
-        viewMenu.add(new JCheckBoxMenuItem("Status Bar"));
-        
-        menuBar.add(fileMenu);
-        menuBar.add(editMenu);
-        menuBar.add(viewMenu);
-        
-        setJMenuBar(menuBar);
+        if(result == YES_OPTION){
+            if(saveTextFile() == JFileChooser.APPROVE_OPTION){
+                System.exit(0);
+            }
+        } else if (result == NO_OPTION){
+            System.exit(0);
+        }
     }
     
     private JPanel createHomePanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        homePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        homePanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         
-        // Add some buttons like in Word's Home tab
-        String[] buttons = {"Font", "Paragraph", "Styles", "Editing"};
-        for (String btn : buttons) {
-            JButton button = new JButton(btn);
-            button.setPreferredSize(new Dimension(80, 25));
-            panel.add(button);
-        }
+        // Open File Button
+        openBtn = new JButton("Open File");
+        openBtn.setPreferredSize(new Dimension(100, 30));
+        openBtn.setFocusable(false);
         
-        return panel;
+        // Save file button
+        saveBtn = new JButton("Save File");
+        saveBtn.setPreferredSize(new Dimension(100, 30));
+        saveBtn.setFocusable(false);
+        
+        addActionListenerToButtons();
+        return homePanel;
     }
     
-    private JPanel createInsertPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+    private void addActionListenerToButtons() {
+        fileChooser = new JFileChooser("This PC");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Text Files", "txt"));
+        openBtn.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openTextFile();
+            }
+        });
         
-        // Add some buttons like in Word's Insert tab
-        String[] buttons = {"Table", "Picture", "Shapes", "Chart"};
-        for (String btn : buttons) {
-            JButton button = new JButton(btn);
-            button.setPreferredSize(new Dimension(80, 25));
-            panel.add(button);
-        }
+        saveBtn.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                saveTextFile();
+            }
+        });
         
-        return panel;
+        homePanel.add(openBtn);
+        homePanel.add(saveBtn);
     }
     
-    private JPanel createLayoutPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        
-        // Add some buttons like in Word's Layout tab
-        String[] buttons = {"Margins", "Orientation", "Size", "Columns"};
-        for (String btn : buttons) {
-            JButton button = new JButton(btn);
-            button.setPreferredSize(new Dimension(80, 25));
-            panel.add(button);
+    private void openTextFile(){
+        if(fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
+            File choosenFile = fileChooser.getSelectedFile();
+            
+            try{
+                String contentFromFile = new String(Files.readAllBytes(choosenFile.toPath()));
+                textArea.removeAll();
+                textArea.setText(contentFromFile);
+            } catch(IOException e){
+                throw new RuntimeException(e);
+            }
         }
-        
-        return panel;
     }
     
-    
-//    void createSuggestions(){
-//        textArea.addKeyListener(new KeyAdapter() {
+    private int saveTextFile(){
+        int result = fileChooser.showSaveDialog(this);
+        if(result == JFileChooser.APPROVE_OPTION){
+            File fileSavedAs = fileChooser.getSelectedFile();
             
-//            @Override // Special keys do not generate keyTyped event
-//            public void keyPressed(KeyEvent e) {
-//                if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
-//                    System.out.println("Backspace pressed");
-//                }
-//                else if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-//                    System.out.println("Enter pressed");
-//                }
-//            }
+            if (!fileSavedAs.getName().toLowerCase().endsWith(".txt")) {
+                fileSavedAs = new File(fileSavedAs.getAbsolutePath() + ".txt");
+            }
             
-//            @Override // Special keys do not generate keyTyped event
-//            public void keyReleased(KeyEvent e) {
-//                System.out.println("Key released: " + KeyEvent.getKeyText(e.getKeyCode()));
-//            }
-            
-//            @Override
-//            public void keyTyped(KeyEvent e) {
-//                System.out.println("Key typed: " + e.getKeyChar());
-//                chEntered = e.getKeyChar();
-//                System.out.println("ChEnterd: " + chEntered);
-//                prefix = setPrefix(chEntered);
-//                System.out.println("Prefix : " + prefix);
-                
-//                getSuggestionsFromTrie(prefix, trie);
-//            }
-//        });
-//
-//    }
+            try {
+                String content = textArea.getText();
+                Files.write(fileSavedAs.toPath(), content.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return result;
+    }
     
     void createSuggestions() {
-        // List and Model setup
+        
+        // List and Model
         listModel = new DefaultListModel<>();
         suggestionList = new JList<>(listModel);
         suggestionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         suggestionList.setFont(new Font("Times New Roman", Font.PLAIN, 14));
         
-        // Popup menu setup
+        // Popup menu
         suggestionPopup = new JPopupMenu();
         suggestionPopup.setFocusable(false);
-        suggestionPopup.add(new JScrollPane(suggestionList));
+        JScrollPane scrollPane = new JScrollPane(suggestionList);
+        scrollPane.setPreferredSize(new Dimension(80, 150));
+        suggestionPopup.add(scrollPane);
         
         // Key listener for typing in the text area
         textArea.addKeyListener(new KeyAdapter() {
             
             @Override
             public void keyPressed(KeyEvent e){
-                if(e.getKeyCode() == KeyEvent.VK_BACK_SPACE || e.getKeyCode() == KeyEvent.VK_ENTER || e.getKeyCode() == KeyEvent.VK_SPACE){
-                    prefix = setPrefix(e);
+                
+                if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_Z) {
+                    if (!undoStack.isEmpty()) {
+                        Operation previous = undoStack.pop();
+                        redoStack.push(previous);
+                        undoOperation(previous);
+                    }
+                } else if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_Y) {
+                    if (!redoStack.isEmpty()) {
+                        Operation next = redoStack.pop();
+                        undoStack.push(next);
+                        redoOperation(next);
+                    }
+                }  else if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                    int pos = textArea.getCaretPosition();
+                    if (pos > 0) {
+                        try {
+                            char deletedChar = textArea.getText(pos - 1, 1).charAt(0);
+                            undoStack.push(new Operation(deletedChar, false, pos - 1));
+                            redoStack.clear();
+                        } catch (Exception ignored) {}
+                    }
+                }
+                
+                if(e.getKeyCode() == KeyEvent.VK_BACK_SPACE || e.getKeyCode() == KeyEvent.VK_SPACE){
+                    try {
+                        prefix = setPrefix(e);
+                    } catch (BadLocationException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                    
                     updatePopupSuggestions(prefix);
+                }
+                
+                if (e.getKeyCode() == KeyEvent.VK_SPACE || e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    SwingUtilities.invokeLater(new Runnable() {
+                        @Override
+                        public void run() {
+                            suggestionPopup.setVisible(false);
+                        }
+                    });
+                    
+                    if(e.getKeyCode() == KeyEvent.VK_ENTER)
+                        prefix = "";
                 }
             }
             
             @Override
             public void keyTyped(KeyEvent e) {
-                prefix = setPrefix(e);
+                // Note that the keyPressed has a caret positioning + 1
+                // It's because keyPressed is not synced with the UI and the components
+                // If caret position was 2 and the key Ctrl+Z is pressed, the caret position would still be
+                // 2 and not 1. But keyTyped is synced with the UI and components (i.e., their positioning)
+                int pos = textArea.getCaretPosition();
+                char typedChar = e.getKeyChar();
+                if (!Character.isISOControl(typedChar)) {
+                    undoStack.push(new Operation(typedChar, true, pos));
+                    redoStack.clear();
+                }
+                try {
+                    prefix = setPrefix(e);
+                } catch (BadLocationException ex) {
+                    throw new RuntimeException(ex);
+                }
                 updatePopupSuggestions(prefix);
             }
             
@@ -214,43 +274,129 @@ public class GUI extends JFrame {
         });
     }
     
-    
-    String setPrefix(KeyEvent e){
-        char charEntered = Character.toLowerCase(e.getKeyChar());
-        if(charEntered >=97 && charEntered <= 122){
-            return prefix + charEntered;
-        } else if (e.getKeyCode() == KeyEvent.VK_SPACE){
-            if(!prefix.isEmpty()){
-                System.out.println("Pressed Space");
-                wordStack.push(prefix);
-                wordStack.push(" ");
-            } else if(wordStack.peek() == " "){
-                wordStack.push(" ");
-            }
-            return "";
-        } else if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE){
-            System.out.println("Pressed Backspace");
-            if(!wordStack.isEmpty() && wordStack.peek() == " " && prefix.isEmpty()){
-                wordStack.pop();
-                if(wordStack.peek().equals(" "))
-                    return prefix;
-                return !wordStack.isEmpty() ? wordStack.pop() : "";
-            }
-            
-            StringBuilder temp = new StringBuilder(prefix);
-            temp.deleteCharAt(temp.length()-1);
-            return temp.toString();
+    private void undoOperation(Operation op){
+        int pos = op.posOfcursor;
+        char ch = op.ch;
+        boolean wasInserted = op.wasInserted;
+        
+        if(wasInserted){
+            textArea.replaceRange("", pos, pos + 1);
+        } else {
+            textArea.insert(ch + "", pos);
         }
-        return prefix;
     }
     
-    void updatePopupSuggestions(String prefix) {
-        if (prefix.isEmpty()) {
+    private void redoOperation(Operation op){
+        int pos = op.posOfcursor;
+        char ch = op.ch;
+        boolean wasInserted = op.wasInserted;
+        
+        if(wasInserted){
+            textArea.insert(ch + "", pos);
+        } else {
+            textArea.replaceRange("", pos, pos + 1);
+        }
+    }
+    
+    private void createActionPopup() {
+        actionPopup = new JPopupMenu();
+        JMenuItem addItem = new JMenuItem("Add to Trie");
+        JMenuItem deleteItem = new JMenuItem("Delete from Trie");
+        JMenuItem copyItem = new JMenuItem("Copy Text");
+        JMenuItem cutItem = new JMenuItem("Cut text");
+        JMenuItem pasteItem = new JMenuItem("Paste text");
+        
+        addItem.addActionListener(e -> {
+            String selectedText = textArea.getSelectedText();
+            if (selectedText != null && !selectedText.isBlank()) {
+                if(!trie.search(selectedText.trim().toLowerCase())){
+                    trie.insert(selectedText.trim().toLowerCase(), 12000);
+                    String content = selectedText + "\t" + "12000\n";
+                    try {
+                        Files.write(path, content.getBytes(), StandardOpenOption.APPEND);
+                    } catch (IOException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                    showMessageDialog(this, "Word added to Trie: " + selectedText);
+                } else {
+                    showMessageDialog(this, "Word already in Trie.");
+                }
+            }
+        });
+        
+        deleteItem.addActionListener(e -> {
+            String selectedText = textArea.getSelectedText();
+            if (selectedText != null && trie.search(selectedText.trim().toLowerCase())) {
+                trie.delete(selectedText.trim().toLowerCase());
+                showMessageDialog(this, "Word deleted from Trie: " + selectedText);
+            } else {
+                showMessageDialog(this, "Word not found in Trie.");
+            }
+        });
+        
+        actionPopup.add(copyItem);
+        actionPopup.add(cutItem);
+        actionPopup.add(pasteItem);
+        actionPopup.add(addItem);
+        actionPopup.add(deleteItem);
+    }
+    
+    private void addTextSelectionListener() {
+        textArea.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if(SwingUtilities.isRightMouseButton(e)){
+                    if (textArea.getSelectedText() != null && !textArea.getSelectedText().isBlank()) {
+                        try {
+                            Rectangle viewRect = textArea.modelToView(textArea.getSelectionStart());
+                            if (viewRect != null) {
+                                actionPopup.show(textArea, viewRect.x, viewRect.y - 80);
+                            }
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    
+    private String setPrefix(KeyEvent e) throws BadLocationException {
+        int caret = textArea.getCaretPosition();
+        String textBeforeCaret = textArea.getText(0, caret);
+        textBeforeCaret += e.getKeyChar();
+        String[] parts = textBeforeCaret.split("\\s+");
+        
+        if(parts.length == 0 || (parts.length == 1 && parts[0].equals(""))){
+            return "";
+        }
+        
+        String prefixToChangeTo = parts[parts.length-1];
+        StringBuilder cleaned = new StringBuilder();
+        for (char c : prefixToChangeTo.toCharArray()) {
+            if (Character.isLetter(c)) {
+                cleaned.append(c);
+            }
+        }
+        return cleaned.toString();
+    }
+    
+    private void updatePopupSuggestions(String prefix) {
+        if (prefix.trim().isEmpty()) {
             suggestionPopup.setVisible(false);
             return;
         }
         
         List<Trie.trieNode> list = trie.getSuggestions(prefix);
+        // Remember, to get the index of any node in LL, we (internally) use traverse method
+        Collections.sort(list, (a, b) -> b.frequency - a.frequency);
+        
+//         Just the first 5 letters
+        while(list.size() > 7){
+            list.remove(list.size() - 1);
+        }
+        
         if (list.isEmpty()) {
             suggestionPopup.setVisible(false);
             return;
@@ -269,22 +415,20 @@ public class GUI extends JFrame {
         }
     }
     
-    void insertSuggestedWord(String word) {
+    private void insertSuggestedWord(String word) {
         try {
             int pos = textArea.getCaretPosition();
             String text = textArea.getText(0, pos);
             
             // Remove the current prefix from text and insert suggestion
-            int start = text.lastIndexOf(' ') + 1;
-            textArea.replaceRange(word + " ", start, pos);
-            wordStack.push(word);
-            wordStack.push(" ");
+            String textBeforeCaret = textArea.getText(0, pos);
+            int start = textBeforeCaret.lastIndexOf(" ") + 1;
+            int end = pos;
+            textArea.replaceRange(word, start, end);
             prefix = ""; // reset the prefix
             suggestionPopup.setVisible(false);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-    
-    
 }

@@ -6,7 +6,7 @@ import java.util.LinkedList;
 
 public class Main {
     public static void main(String[] args) throws IOException {
-        Trie t = new Trie();
+        Trie t = new Trie("B:\\University Material\\4th Semester\\Data Structures\\Project\\final_merged_frequencies.txt");
 //        String arr[] = {"Application", "App", "Hello", "Heelo", "Mic", "Check", "One", };
 //        for(String str: arr)
 //            t.insert(str);
@@ -17,16 +17,7 @@ public class Main {
 //        t.traverse();
 //        System.out.println(t.search("app"));
 //
-        BufferedReader reader = new BufferedReader(new FileReader("merged.txt"));
-        String line = reader.readLine();
-        while (line != null) {
-            String[] parts = line.split("\t");
-            String word = parts[0];
-            int frequency = Integer.parseInt(parts[1]);
-            t.insert(word, frequency);
-            line = reader.readLine();
-        }
-        reader.close();
+
 //
 //        t.traverse();
 //        System.out.println(t.search("growth"));
@@ -34,8 +25,7 @@ public class Main {
 //        LinkedList<Trie.trieNode> suggestions = t.getSuggestions("a");
 //        for(Trie.trieNode node: suggestions)
 //            System.out.println(node.word + " " + node.frequency);
-        GUI gui = new GUI();
-        gui.setTrie(t);
+        GUI gui = new GUI(t);
         gui.setVisible(true);
     }
 }

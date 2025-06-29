@@ -1,17 +1,17 @@
+import java.io.*;
 import java.util.LinkedList;
 import java.util.Queue;
 
 public class Trie {
-     static class trieNode {
-        String word;
+     static class trieNode{
+         
+         String word;
         int frequency;
         trieNode children[];
         boolean endOfWord;
         
         trieNode(){
             children = new trieNode[26];
-            for(trieNode i : children)
-                i = null;
             endOfWord = false;
             frequency = 0;
         }
@@ -19,11 +19,30 @@ public class Trie {
     
     private trieNode root = new trieNode();
     
+    Trie(String filePath){
+        try{
+            populateTrie(filePath);
+        } catch (IOException e){
+            throw new RuntimeException(e);
+        }
+    }
+    
+    void populateTrie(String filePath) throws IOException {
+        BufferedReader reader = new BufferedReader(new FileReader(filePath));
+        String line = reader.readLine();
+        while (line != null) {
+            String[] parts = line.split("\t");
+            String word = parts[0];
+            int frequency = Integer.parseInt(parts[1]);
+            insert(word, frequency);
+            line = reader.readLine();
+        }
+        reader.close();
+    }
+    
     public void insert(String word, int frequency){
         if(isAlphabetsOnly(word))
             insert(word, frequency, root);
-//        else
-//            System.out.println("Only alphabets please.");
     }
     
     private void insert(String word, int frequency, trieNode root){
@@ -37,7 +56,7 @@ public class Trie {
             if(i == word.length()-1){
                 root.children[idx].endOfWord = true;
                 root.children[idx].frequency = frequency;
-                root.word = word;
+                root.children[idx].word = word;
             }
             
             root = root.children[idx];
