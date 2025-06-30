@@ -30975,3 +30975,4 @@ concise	342
 Noman	12000
 Assalam	12000
 alaikum	12000
+Umair	12000

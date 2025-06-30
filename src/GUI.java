@@ -20,12 +20,13 @@ public class GUI extends JFrame {
     Path path = Paths.get(wordsFile.getPath());
     
     String prefix = new String("");
+    String copiedOrCutText;
     private JTextArea textArea;
-    private JTabbedPane tabbedPane;
     Trie trie;
     JButton openBtn, saveBtn;
     private JPopupMenu suggestionPopup;
-    private JPopupMenu actionPopup;
+    private JPopupMenu actionPopupTextSelected;
+    private JPopupMenu actionPopupTextNotSelected;
     private StackUsingArray<Operation> undoStack = new StackUsingArray<>();
     private StackUsingArray<Operation> redoStack = new StackUsingArray<>();
     
@@ -43,7 +44,7 @@ public class GUI extends JFrame {
     public GUI(Trie t) {
         trie = t;
         // Set up the main frame
-        setTitle("Muhammad's Editor");
+        setTitle("Auto Suggest Editor");
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(800, 600));
         setLayout(new BorderLayout(20,10));
@@ -60,6 +61,7 @@ public class GUI extends JFrame {
         
         // Add padding to text area using a border
         textArea.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        textArea.setMargin(new Insets(10, 10, 10, 10));
         
         add(createHomePanel(), BorderLayout.NORTH);
         
@@ -184,7 +186,7 @@ public class GUI extends JFrame {
         suggestionPopup = new JPopupMenu();
         suggestionPopup.setFocusable(false);
         JScrollPane scrollPane = new JScrollPane(suggestionList);
-        scrollPane.setPreferredSize(new Dimension(80, 150));
+        scrollPane.setPreferredSize(new Dimension(120, 150));
         suggestionPopup.add(scrollPane);
         
         // Key listener for typing in the text area
@@ -206,11 +208,20 @@ public class GUI extends JFrame {
                         redoOperation(next);
                     }
                 }  else if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
-                    int pos = textArea.getCaretPosition();
-                    if (pos > 0) {
+                    int start = textArea.getSelectionStart();
+                    int end = textArea.getSelectionEnd();
+                    
+                    // When the user selects text (deletes more than one character)
+                    if (start != end) {
                         try {
-                            char deletedChar = textArea.getText(pos - 1, 1).charAt(0);
-                            undoStack.push(new Operation(deletedChar, false, pos - 1));
+                            String deleted = textArea.getText(start, end - start);
+                            undoStack.push(new Operation(deleted, false, start));
+                            redoStack.clear();
+                        } catch (Exception ignored) {}
+                    } else if (start > 0) { // Deletes single character (normal backspace)
+                        try {
+                            String deleted = textArea.getText(start - 1, 1);
+                            undoStack.push(new Operation(deleted, false, start - 1));
                             redoStack.clear();
                         } catch (Exception ignored) {}
                     }
@@ -248,7 +259,7 @@ public class GUI extends JFrame {
                 int pos = textArea.getCaretPosition();
                 char typedChar = e.getKeyChar();
                 if (!Character.isISOControl(typedChar)) {
-                    undoStack.push(new Operation(typedChar, true, pos));
+                    undoStack.push(new Operation(typedChar + "", true, pos));
                     redoStack.clear();
                 }
                 try {
@@ -276,39 +287,40 @@ public class GUI extends JFrame {
     
     private void undoOperation(Operation op){
         int pos = op.posOfcursor;
-        char ch = op.ch;
+        String text = op.text;
         boolean wasInserted = op.wasInserted;
         
         if(wasInserted){
-            textArea.replaceRange("", pos, pos + 1);
+            textArea.replaceRange("", pos, pos + text.length());
         } else {
-            textArea.insert(ch + "", pos);
+            textArea.insert(text, pos);
         }
     }
     
     private void redoOperation(Operation op){
         int pos = op.posOfcursor;
-        char ch = op.ch;
+        String text = op.text;
         boolean wasInserted = op.wasInserted;
         
         if(wasInserted){
-            textArea.insert(ch + "", pos);
+            textArea.insert(text, pos);
         } else {
-            textArea.replaceRange("", pos, pos + 1);
+            textArea.replaceRange("", pos, pos + text.length());
         }
     }
     
     private void createActionPopup() {
-        actionPopup = new JPopupMenu();
-        JMenuItem addItem = new JMenuItem("Add to Trie");
-        JMenuItem deleteItem = new JMenuItem("Delete from Trie");
+        actionPopupTextSelected = new JPopupMenu();
+        actionPopupTextNotSelected = new JPopupMenu();
+        JMenuItem addItem = new JMenuItem("Add to Dictionary");
+        JMenuItem deleteItem = new JMenuItem("Delete from Dictionary");
         JMenuItem copyItem = new JMenuItem("Copy Text");
         JMenuItem cutItem = new JMenuItem("Cut text");
         JMenuItem pasteItem = new JMenuItem("Paste text");
         
         addItem.addActionListener(e -> {
             String selectedText = textArea.getSelectedText();
-            if (selectedText != null && !selectedText.isBlank()) {
+            if (!selectedText.isBlank()) {
                 if(!trie.search(selectedText.trim().toLowerCase())){
                     trie.insert(selectedText.trim().toLowerCase(), 12000);
                     String content = selectedText + "\t" + "12000\n";
@@ -334,11 +346,48 @@ public class GUI extends JFrame {
             }
         });
         
-        actionPopup.add(copyItem);
-        actionPopup.add(cutItem);
-        actionPopup.add(pasteItem);
-        actionPopup.add(addItem);
-        actionPopup.add(deleteItem);
+        copyItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String selectedText = textArea.getSelectedText();
+                if(!selectedText.equals("")){
+                    copiedOrCutText = textArea.getSelectedText();
+                }
+            }
+        });
+        
+        cutItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String selectedText = textArea.getSelectedText();
+                if(!selectedText.equals("")){
+                    int start = textArea.getSelectionStart();
+                    int end = textArea.getSelectionEnd();
+                    
+                    copiedOrCutText = textArea.getSelectedText();
+                    textArea.replaceRange("", start, end);
+                }
+            }
+        });
+        
+        pasteItem.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if(copiedOrCutText != null && !copiedOrCutText.isBlank()){
+                    int position = textArea.getCaretPosition();
+                    textArea.insert(copiedOrCutText, position);
+                }
+            }
+        });
+        
+        // For popup when a text is not selected
+        actionPopupTextNotSelected.add(pasteItem);
+        
+        // For popup when a text is selected
+        actionPopupTextSelected.add(copyItem);
+        actionPopupTextSelected.add(cutItem);
+        actionPopupTextSelected.add(addItem);
+        actionPopupTextSelected.add(deleteItem);
     }
     
     private void addTextSelectionListener() {
@@ -350,7 +399,16 @@ public class GUI extends JFrame {
                         try {
                             Rectangle viewRect = textArea.modelToView(textArea.getSelectionStart());
                             if (viewRect != null) {
-                                actionPopup.show(textArea, viewRect.x, viewRect.y - 80);
+                                actionPopupTextSelected.show(textArea, viewRect.x, viewRect.y - 80);
+                            }
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    } else if (textArea.getSelectedText() == null) {
+                        try {
+                            Rectangle viewRect = textArea.modelToView(textArea.getCaretPosition());
+                            if (viewRect != null) {
+                                actionPopupTextNotSelected.show(textArea, viewRect.x, viewRect.y - 30);
                             }
                         } catch (Exception ex) {
                             ex.printStackTrace();
@@ -392,7 +450,6 @@ public class GUI extends JFrame {
         // Remember, to get the index of any node in LL, we (internally) use traverse method
         Collections.sort(list, (a, b) -> b.frequency - a.frequency);
         
-//         Just the first 5 letters
         while(list.size() > 7){
             list.remove(list.size() - 1);
         }
@@ -418,13 +475,32 @@ public class GUI extends JFrame {
     private void insertSuggestedWord(String word) {
         try {
             int pos = textArea.getCaretPosition();
-            String text = textArea.getText(0, pos);
-            
-            // Remove the current prefix from text and insert suggestion
             String textBeforeCaret = textArea.getText(0, pos);
             int start = textBeforeCaret.lastIndexOf(" ") + 1;
             int end = pos;
+            
             textArea.replaceRange(word, start, end);
+            
+            /*
+             Thora exceptional cases wala part
+             When you have inserted a suggested word after typing the prefix, the prefix still remains in the stack
+             as Operations (character-by-character). So, before inserting the suggested word into the undoStack (as
+             String), you have to remove the characters from undoStack
+            */
+            int prefixLength = end - start;
+            for (int i = 0; i < prefixLength; i++) {
+                if (!undoStack.isEmpty()) {
+                    Operation lastOp = undoStack.peek();
+                    if (lastOp.wasInserted && lastOp.text.length() == 1) {
+                        undoStack.pop();
+                    } else {
+                        break;
+                    }
+                }
+            }
+            
+            undoStack.push(new Operation(word, true, start));
+            redoStack.clear();
             prefix = ""; // reset the prefix
             suggestionPopup.setVisible(false);
         } catch (Exception e) {

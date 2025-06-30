@@ -1,11 +1,12 @@
 public class Operation {
-    char ch;
+    String text
+            ;
     boolean wasInserted;
     int posOfcursor;
     
-    Operation(char ch, boolean wasInserted, int poc){
+    Operation(String txt, boolean wasInserted, int poc){
         this.posOfcursor = poc;
         this.wasInserted = wasInserted;
-        this.ch = ch;
+        this.text = txt;
     }
 }
