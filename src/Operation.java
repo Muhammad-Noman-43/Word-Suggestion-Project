@@ -1,6 +1,5 @@
 public class Operation {
-    String text
-            ;
+    String text;
     boolean wasInserted;
     int posOfcursor;
     

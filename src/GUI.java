@@ -23,7 +23,7 @@ public class GUI extends JFrame {
     String copiedOrCutText;
     private JTextArea textArea;
     Trie trie;
-    JButton openBtn, saveBtn;
+//    JButton openBtn, saveBtn;
     private JPopupMenu suggestionPopup;
     private JPopupMenu actionPopupTextSelected;
     private JPopupMenu actionPopupTextNotSelected;
@@ -54,26 +54,25 @@ public class GUI extends JFrame {
         
         // Create text area with padding
         textArea = new JTextArea();
-        textArea.setFont(new Font("Times New Roman", Font.PLAIN, 16));
+//        textArea.setFont(new Font("Times New Roman", Font.PLAIN, 16));
+        textArea.setFont(new Font("Monospaced", Font.PLAIN, 16));
         textArea.setLineWrap(true);
         textArea.setWrapStyleWord(true);
+        textArea.setFocusTraversalKeysEnabled(false); // this will disable TAB behavior
+        textArea.setTabSize(4);
         createSuggestions();
         
-        // Add padding to text area using a border
         textArea.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         textArea.setMargin(new Insets(10, 10, 10, 10));
         
-        add(createHomePanel(), BorderLayout.NORTH);
-        
-        // Add scroll pane for text area
         JScrollPane scrollPane = new JScrollPane(textArea);
         mainPanel.add(scrollPane, BorderLayout.CENTER);
         
-        // Add main panel to frame
         add(mainPanel, BorderLayout.CENTER);
         
         createActionPopup();
         addTextSelectionListener();
+        add(createMenuBar(),BorderLayout.NORTH);
         
         pack();
         setLocationRelativeTo(null);
@@ -84,6 +83,101 @@ public class GUI extends JFrame {
             }
         });
     }
+    
+    private JMenuBar createMenuBar() {
+        JMenuBar menuBar = new JMenuBar();
+        
+        JMenu fileMenu = new JMenu("File");
+        
+        JMenuItem newItem = new JMenuItem("New");
+        JMenuItem openItem = new JMenuItem("Open...");
+        JMenuItem saveItem = new JMenuItem("Save");
+        JMenuItem saveAsItem = new JMenuItem("Save As...");
+        JMenuItem exitItem = new JMenuItem("Exit");
+        
+        // action listeners
+        newItem.addActionListener(e -> {
+            int confirm = JOptionPane.showOptionDialog(this,
+                    "Do you want to clear current document?", "New Document",
+                    JOptionPane.YES_NO_OPTION, INFORMATION_MESSAGE, null,
+                    new String[]{"Save work first", "Continue without saving", "Cancel"},
+                    "Save");
+            if (confirm == JOptionPane.YES_OPTION) {
+                saveTextFile();
+                textArea.setText("");
+                undoStack.clear();
+                redoStack.clear();
+            } else if (confirm == NO_OPTION){
+                textArea.setText("");
+                undoStack.clear();
+                redoStack.clear();
+            }
+        });
+        
+        openItem.addActionListener(e -> openTextFile());
+        saveItem.addActionListener(e -> saveTextFile());
+        exitItem.addActionListener(e -> confirmationDialogue());
+        saveAsItem.addActionListener(e -> saveFileAs());
+        
+        // Add to menu
+        fileMenu.add(newItem);
+        fileMenu.add(openItem);
+        fileMenu.add(saveItem);
+        fileMenu.add(saveAsItem);
+        fileMenu.addSeparator();
+        fileMenu.add(exitItem);
+        
+        // Edit Menu
+        JMenu editMenu = new JMenu("Edit");
+        JMenuItem undoItem = new JMenuItem("Undo");
+        JMenuItem redoItem = new JMenuItem("Redo");
+        JMenuItem editorSettingsItem = new JMenuItem("Editor Settings...");
+        
+        undoItem.addActionListener(e -> {
+            if (!undoStack.isEmpty()) {
+                Operation previous = undoStack.pop();
+                redoStack.push(previous);
+                undoOperation(previous);
+            }
+        });
+        
+        redoItem.addActionListener(e -> {
+            if (!redoStack.isEmpty()) {
+                Operation next = redoStack.pop();
+                undoStack.push(next);
+                redoOperation(next);
+            }
+        });
+        
+        editorSettingsItem.addActionListener(e -> {
+            EditorSettingsWindow settingsWindow = new EditorSettingsWindow(textArea);
+            settingsWindow.setVisible(true);
+        });
+        
+        editMenu.add(undoItem);
+        editMenu.add(redoItem);
+        editMenu.addSeparator();
+        editMenu.add(editorSettingsItem);
+        
+        // Help Menu
+        JMenu helpMenu = new JMenu("Help");
+        JMenuItem aboutItem = new JMenuItem("About");
+        
+        aboutItem.addActionListener(e ->
+                JOptionPane.showMessageDialog(this, "Auto Suggest Editor\nCreated by Muhammad Noman", "About", JOptionPane.INFORMATION_MESSAGE)
+        );
+        
+        helpMenu.add(aboutItem);
+        
+        // Add menus to the bar
+        menuBar.add(fileMenu);
+        menuBar.add(editMenu);
+        menuBar.add(helpMenu);
+        
+        return menuBar;
+    }
+    
+    
     
     private void confirmationDialogue() {
         
@@ -102,46 +196,9 @@ public class GUI extends JFrame {
         }
     }
     
-    private JPanel createHomePanel() {
-        homePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        homePanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        
-        // Open File Button
-        openBtn = new JButton("Open File");
-        openBtn.setPreferredSize(new Dimension(100, 30));
-        openBtn.setFocusable(false);
-        
-        // Save file button
-        saveBtn = new JButton("Save File");
-        saveBtn.setPreferredSize(new Dimension(100, 30));
-        saveBtn.setFocusable(false);
-        
-        addActionListenerToButtons();
-        return homePanel;
-    }
-    
-    private void addActionListenerToButtons() {
+    private void openTextFile(){
         fileChooser = new JFileChooser("This PC");
         fileChooser.setFileFilter(new FileNameExtensionFilter("Text Files", "txt"));
-        openBtn.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                openTextFile();
-            }
-        });
-        
-        saveBtn.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                saveTextFile();
-            }
-        });
-        
-        homePanel.add(openBtn);
-        homePanel.add(saveBtn);
-    }
-    
-    private void openTextFile(){
         if(fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
             File choosenFile = fileChooser.getSelectedFile();
             
@@ -156,6 +213,8 @@ public class GUI extends JFrame {
     }
     
     private int saveTextFile(){
+        fileChooser = new JFileChooser("This PC");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Text Files", "txt"));
         int result = fileChooser.showSaveDialog(this);
         if(result == JFileChooser.APPROVE_OPTION){
             File fileSavedAs = fileChooser.getSelectedFile();
@@ -163,6 +222,23 @@ public class GUI extends JFrame {
             if (!fileSavedAs.getName().toLowerCase().endsWith(".txt")) {
                 fileSavedAs = new File(fileSavedAs.getAbsolutePath() + ".txt");
             }
+            
+            try {
+                String content = textArea.getText();
+                Files.write(fileSavedAs.toPath(), content.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return result;
+    }
+    
+    private int saveFileAs(){
+        JOptionPane.showMessageDialog(fileChooser, "Please specify the file type using EXTENSIONS\n to avoid any faults in saving. e.g. file.txt, file.docx");
+        fileChooser = new JFileChooser("This PC");
+        int result = fileChooser.showSaveDialog(this);
+        if(result == JFileChooser.APPROVE_OPTION){
+            File fileSavedAs = fileChooser.getSelectedFile();
             
             try {
                 String content = textArea.getText();
@@ -207,7 +283,17 @@ public class GUI extends JFrame {
                         undoStack.push(next);
                         redoOperation(next);
                     }
-                }  else if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                } else if (e.getKeyCode() == KeyEvent.VK_TAB){
+                    SwingUtilities.invokeLater(() -> {
+                        e.consume();
+                        int pos = textArea.getCaretPosition();
+//                        textArea.insert("\t", pos);
+                        undoStack.push(new Operation("\t", true, pos));
+                        redoStack.clear();
+                        prefix = "";
+                        suggestionPopup.setVisible(false);
+                    });
+                } else if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
                     int start = textArea.getSelectionStart();
                     int end = textArea.getSelectionEnd();
                     
@@ -233,7 +319,6 @@ public class GUI extends JFrame {
                     } catch (BadLocationException ex) {
                         throw new RuntimeException(ex);
                     }
-                    
                     updatePopupSuggestions(prefix);
                 }
                 
@@ -245,8 +330,17 @@ public class GUI extends JFrame {
                         }
                     });
                     
-                    if(e.getKeyCode() == KeyEvent.VK_ENTER)
-                        prefix = "";
+                    if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                        SwingUtilities.invokeLater(() -> {
+                            int pos = textArea.getCaretPosition() - 1; // go back one step
+                            if (pos >= 0) {
+                                undoStack.push(new Operation("\n", true, pos));
+                                redoStack.clear();
+                                prefix = "";
+                            }
+                        });
+                    }
+                    
                 }
             }
             
@@ -290,10 +384,15 @@ public class GUI extends JFrame {
         String text = op.text;
         boolean wasInserted = op.wasInserted;
         
-        if(wasInserted){
-            textArea.replaceRange("", pos, pos + text.length());
+        if (wasInserted) {
+            int end = Math.min(pos + text.length(), textArea.getText().length());
+            if (pos >= 0 && end >= pos) {
+                textArea.replaceRange("", pos, end);
+            }
         } else {
-            textArea.insert(text, pos);
+            if (pos >= 0 && pos <= textArea.getText().length()) {
+                textArea.insert(text, pos);
+            }
         }
     }
     
@@ -302,10 +401,15 @@ public class GUI extends JFrame {
         String text = op.text;
         boolean wasInserted = op.wasInserted;
         
-        if(wasInserted){
-            textArea.insert(text, pos);
+        if (wasInserted) {
+            if (pos >= 0 && pos <= textArea.getText().length()) {
+                textArea.insert(text, pos);
+            }
         } else {
-            textArea.replaceRange("", pos, pos + text.length());
+            int end = Math.min(pos + text.length(), textArea.getText().length());
+            if (pos >= 0 && end >= pos) {
+                textArea.replaceRange("", pos, end);
+            }
         }
     }
     
@@ -474,12 +578,21 @@ public class GUI extends JFrame {
     
     private void insertSuggestedWord(String word) {
         try {
-            int pos = textArea.getCaretPosition();
-            String textBeforeCaret = textArea.getText(0, pos);
-            int start = textBeforeCaret.lastIndexOf(" ") + 1;
-            int end = pos;
+            int pos = textArea.getCaretPosition(); // Get caret position
+            int line = textArea.getLineOfOffset(pos); // Get line number
+            int lineStart = textArea.getLineStartOffset(line); // Get the starting index of line
             
-            textArea.replaceRange(word, start, end);
+            String lineText = textArea.getText(lineStart, pos - lineStart); // Yeh text lega poori line ka
+            int lastSpace = lineText.lastIndexOf(" "); // Yeh line me sub se pehle aane wali space ka index lega
+            
+            int start;
+            if (lastSpace == -1) { // lastSpace -1 hone ka mtlb = line me kahi pr bhi sapce nahi hai
+                start = lineStart; // Line ka start hi starting index hai (for inserting the word)
+            } else {
+                start = lineStart + lastSpace + 1; // Last space k baad wali position is for inserting words
+            }
+            
+            textArea.replaceRange(word, start, pos); // Simply jo position start ki set hui hai waha text daal do
             
             /*
              Thora exceptional cases wala part
@@ -487,24 +600,24 @@ public class GUI extends JFrame {
              as Operations (character-by-character). So, before inserting the suggested word into the undoStack (as
              String), you have to remove the characters from undoStack
             */
-            int prefixLength = end - start;
+            int prefixLength = pos - start;
             for (int i = 0; i < prefixLength; i++) {
                 if (!undoStack.isEmpty()) {
-                    Operation lastOp = undoStack.peek();
-                    if (lastOp.wasInserted && lastOp.text.length() == 1) {
+                    Operation last = undoStack.peek();
+                    if (last.wasInserted && last.text.length() == 1) {
                         undoStack.pop();
-                    } else {
-                        break;
-                    }
+                    } else break;
                 }
             }
             
+            // Push the whole word
             undoStack.push(new Operation(word, true, start));
             redoStack.clear();
-            prefix = ""; // reset the prefix
+            prefix = "";
             suggestionPopup.setVisible(false);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+    
 }
