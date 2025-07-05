@@ -11,7 +11,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.List;
-
 import static javax.swing.JOptionPane.*;
 
 public class GUI extends JFrame {
@@ -23,7 +22,6 @@ public class GUI extends JFrame {
     String copiedOrCutText;
     private JTextArea textArea;
     Trie trie;
-//    JButton openBtn, saveBtn;
     private JPopupMenu suggestionPopup;
     private JPopupMenu actionPopupTextSelected;
     private JPopupMenu actionPopupTextNotSelected;
@@ -34,12 +32,6 @@ public class GUI extends JFrame {
     
     private JList<String> suggestionList;
     private DefaultListModel<String> listModel;
-    JPanel homePanel;
-    
-    
-    void setTrie(Trie t){
-        trie = t;
-    }
     
     public GUI(Trie t) {
         trie = t;
@@ -47,15 +39,15 @@ public class GUI extends JFrame {
         setTitle("Auto Suggest Editor");
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(800, 600));
-        setLayout(new BorderLayout(20,10));
+        setLayout(new BorderLayout(20,0));
+        setIconImage(new ImageIcon("download.png").getImage());
         
         // Create main content panel with border layout
         JPanel mainPanel = new JPanel(new BorderLayout());
         
         // Create text area with padding
         textArea = new JTextArea();
-//        textArea.setFont(new Font("Times New Roman", Font.PLAIN, 16));
-        textArea.setFont(new Font("Monospaced", Font.PLAIN, 16));
+        textArea.setFont(new Font("Consolas", Font.PLAIN, 16));
         textArea.setLineWrap(true);
         textArea.setWrapStyleWord(true);
         textArea.setFocusTraversalKeysEnabled(false); // this will disable TAB behavior
@@ -87,6 +79,7 @@ public class GUI extends JFrame {
     private JMenuBar createMenuBar() {
         JMenuBar menuBar = new JMenuBar();
         
+        
         JMenu fileMenu = new JMenu("File");
         
         JMenuItem newItem = new JMenuItem("New");
@@ -97,11 +90,19 @@ public class GUI extends JFrame {
         
         // action listeners
         newItem.addActionListener(e -> {
+            if(textArea.getText().isBlank()){
+                textArea.setText("");
+                undoStack.clear();
+                redoStack.clear();
+                return;
+            }
+            
             int confirm = JOptionPane.showOptionDialog(this,
                     "Do you want to clear current document?", "New Document",
-                    JOptionPane.YES_NO_OPTION, INFORMATION_MESSAGE, null,
+                    JOptionPane.YES_NO_CANCEL_OPTION, INFORMATION_MESSAGE, null,
                     new String[]{"Save work first", "Continue without saving", "Cancel"},
                     "Save");
+            
             if (confirm == JOptionPane.YES_OPTION) {
                 saveTextFile();
                 textArea.setText("");
@@ -206,6 +207,8 @@ public class GUI extends JFrame {
                 String contentFromFile = new String(Files.readAllBytes(choosenFile.toPath()));
                 textArea.removeAll();
                 textArea.setText(contentFromFile);
+                undoStack.clear();
+                redoStack.clear();
             } catch(IOException e){
                 throw new RuntimeException(e);
             }
@@ -227,7 +230,8 @@ public class GUI extends JFrame {
                 String content = textArea.getText();
                 Files.write(fileSavedAs.toPath(), content.getBytes());
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                JOptionPane.showMessageDialog(this, "Error saving file: " + e.getMessage(), 
+                                        "Save Error", JOptionPane.ERROR_MESSAGE);
             }
         }
         return result;
@@ -265,6 +269,22 @@ public class GUI extends JFrame {
         scrollPane.setPreferredSize(new Dimension(120, 150));
         suggestionPopup.add(scrollPane);
         
+        addKeyListenersToTextArea();
+        
+//         Handle list item selection with mouse
+        suggestionList.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                if (evt.getClickCount() == 1) {
+                    String selected = suggestionList.getSelectedValue();
+                    if (selected != null) {
+                        insertSuggestedWord(selected);
+                    }
+                }
+            }
+        });
+    }
+    
+    private void addKeyListenersToTextArea() {
         // Key listener for typing in the text area
         textArea.addKeyListener(new KeyAdapter() {
             
@@ -282,6 +302,32 @@ public class GUI extends JFrame {
                         Operation next = redoStack.pop();
                         undoStack.push(next);
                         redoOperation(next);
+                    }
+                } else if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_C) {
+                e.consume();
+                String selectedText = textArea.getSelectedText();
+                if(selectedText != null && !selectedText.equals("")){
+                    copiedOrCutText = selectedText;
+                }
+                } else if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_X) {
+                    e.consume();
+                    String selectedText = textArea.getSelectedText();
+                    if(selectedText != null && !selectedText.equals("")){
+                        int start = textArea.getSelectionStart();
+                        int end = textArea.getSelectionEnd();
+                        
+                        copiedOrCutText = selectedText;
+                        textArea.replaceRange("", start, end);
+                        undoStack.push(new Operation(copiedOrCutText, false, start));
+                        redoStack.clear();
+                    }
+                } else if (e.isControlDown() && e.getKeyCode() == KeyEvent.VK_V) {
+                    e.consume();
+                    if(copiedOrCutText != null && !copiedOrCutText.isBlank()){
+                        int position = textArea.getCaretPosition();
+                        textArea.insert(copiedOrCutText, position);
+                        undoStack.push(new Operation(copiedOrCutText, true, position));
+                        redoStack.clear();
                     }
                 } else if (e.getKeyCode() == KeyEvent.VK_TAB){
                     SwingUtilities.invokeLater(() -> {
@@ -365,18 +411,6 @@ public class GUI extends JFrame {
             }
             
         });
-        
-//         Handle list item selection with mouse
-        suggestionList.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                if (evt.getClickCount() == 1) {
-                    String selected = suggestionList.getSelectedValue();
-                    if (selected != null) {
-                        insertSuggestedWord(selected);
-                    }
-                }
-            }
-        });
     }
     
     private void undoOperation(Operation op){
@@ -424,7 +458,7 @@ public class GUI extends JFrame {
         
         addItem.addActionListener(e -> {
             String selectedText = textArea.getSelectedText();
-            if (!selectedText.isBlank()) {
+            if (selectedText != null && !selectedText.isBlank()) {
                 if(!trie.search(selectedText.trim().toLowerCase())){
                     trie.insert(selectedText.trim().toLowerCase(), 12000);
                     String content = selectedText + "\t" + "12000\n";
@@ -454,7 +488,7 @@ public class GUI extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String selectedText = textArea.getSelectedText();
-                if(!selectedText.equals("")){
+                if(selectedText != null && !selectedText.equals("")){
                     copiedOrCutText = textArea.getSelectedText();
                 }
             }
@@ -464,12 +498,13 @@ public class GUI extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String selectedText = textArea.getSelectedText();
-                if(!selectedText.equals("")){
+                if(selectedText != null && !selectedText.equals("")){
                     int start = textArea.getSelectionStart();
                     int end = textArea.getSelectionEnd();
                     
                     copiedOrCutText = textArea.getSelectedText();
                     textArea.replaceRange("", start, end);
+                    undoStack.push(new Operation(copiedOrCutText, false, start));
                 }
             }
         });
@@ -480,6 +515,8 @@ public class GUI extends JFrame {
                 if(copiedOrCutText != null && !copiedOrCutText.isBlank()){
                     int position = textArea.getCaretPosition();
                     textArea.insert(copiedOrCutText, position);
+                    undoStack.push(new Operation(copiedOrCutText, true, position));
+                    redoStack.clear();
                 }
             }
         });

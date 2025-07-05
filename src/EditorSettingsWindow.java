@@ -30,7 +30,6 @@ public class EditorSettingsWindow extends JFrame {
     }
     
     private void initializeComponents() {
-        // Font settings
         String[] fontFamilies = GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
         fontFamilyCombo = new JComboBox<>(fontFamilies);
         fontFamilyCombo.setSelectedItem("Monospaced");
@@ -46,11 +45,9 @@ public class EditorSettingsWindow extends JFrame {
         
         fontSizeLabel = new JLabel("16");
         
-        // Font style checkboxes
         boldCheck = new JCheckBox("Bold");
         italicCheck = new JCheckBox("Italic");
         
-        // Color choosers
         fontColorChooser = new JColorChooser(Color.BLACK);
         backgroundColorChooser = new JColorChooser(Color.WHITE);
     }
@@ -58,20 +55,16 @@ public class EditorSettingsWindow extends JFrame {
     private void setupLayout() {
         setLayout(new BorderLayout());
         
-        // Create tabbed pane
         JTabbedPane tabbedPane = new JTabbedPane();
         
-        // Font settings tab
         JPanel fontPanel = createFontPanel();
         tabbedPane.addTab("Font", fontPanel);
         
-        // Color settings tab
         JPanel colorPanel = createColorPanel();
         tabbedPane.addTab("Colors", colorPanel);
         
         add(tabbedPane, BorderLayout.CENTER);
         
-        // Button panel
         JPanel buttonPanel = new JPanel(new FlowLayout());
         JButton applyButton = new JButton("Apply All");
         JButton resetButton = new JButton("Reset");
@@ -108,7 +101,6 @@ public class EditorSettingsWindow extends JFrame {
     private JPanel createFontPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         
-        // North panel for font family and style
         JPanel northPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         northPanel.add(new JLabel("Font Family:"));
         northPanel.add(fontFamilyCombo);
@@ -116,21 +108,13 @@ public class EditorSettingsWindow extends JFrame {
         northPanel.add(new JLabel("Font Style:"));
         northPanel.add(fontStyleCombo);
         
-        // Center panel for font size
         JPanel centerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         centerPanel.add(new JLabel("Font Size:"));
         centerPanel.add(fontSizeSlider);
         centerPanel.add(fontSizeLabel);
         
-        // South panel for checkboxes
-        JPanel southPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        southPanel.setBorder(BorderFactory.createTitledBorder("Font Effects"));
-        southPanel.add(boldCheck);
-        southPanel.add(italicCheck);
-        
         panel.add(northPanel, BorderLayout.NORTH);
         panel.add(centerPanel, BorderLayout.CENTER);
-        panel.add(southPanel, BorderLayout.SOUTH);
         
         return panel;
     }
@@ -138,17 +122,14 @@ public class EditorSettingsWindow extends JFrame {
     private JPanel createColorPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         
-        // Font color panel
         JPanel fontColorPanel = new JPanel(new BorderLayout());
         fontColorPanel.setBorder(BorderFactory.createTitledBorder("Font Color"));
         fontColorPanel.add(fontColorChooser, BorderLayout.CENTER);
         
-        // Background color panel
         JPanel backgroundColorPanel = new JPanel(new BorderLayout());
         backgroundColorPanel.setBorder(BorderFactory.createTitledBorder("Background Color"));
         backgroundColorPanel.add(backgroundColorChooser, BorderLayout.CENTER);
         
-        // Split panel to show both color choosers
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, fontColorPanel, backgroundColorPanel);
         splitPane.setResizeWeight(0.5);
         
@@ -158,7 +139,6 @@ public class EditorSettingsWindow extends JFrame {
     }
     
     private void setupEventListeners() {
-        // Font family change
         fontFamilyCombo.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -166,7 +146,6 @@ public class EditorSettingsWindow extends JFrame {
             }
         });
         
-        // Font style change
         fontStyleCombo.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -174,7 +153,6 @@ public class EditorSettingsWindow extends JFrame {
             }
         });
         
-        // Font size change
         fontSizeSlider.addChangeListener(new ChangeListener() {
             @Override
             public void stateChanged(ChangeEvent e) {
@@ -183,7 +161,6 @@ public class EditorSettingsWindow extends JFrame {
             }
         });
         
-        // Font effects
         boldCheck.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -198,7 +175,6 @@ public class EditorSettingsWindow extends JFrame {
             }
         });
         
-        // Color changes
         fontColorChooser.getSelectionModel().addChangeListener(new ChangeListener() {
             @Override
             public void stateChanged(ChangeEvent e) {
@@ -221,7 +197,6 @@ public class EditorSettingsWindow extends JFrame {
             fontSizeSlider.setValue(currentFont.getSize());
             fontSizeLabel.setText(String.valueOf(currentFont.getSize()));
             
-            // Set font style
             if (currentFont.isBold() && currentFont.isItalic()) {
                 fontStyleCombo.setSelectedItem("Bold Italic");
             } else if (currentFont.isBold()) {
@@ -232,7 +207,6 @@ public class EditorSettingsWindow extends JFrame {
                 fontStyleCombo.setSelectedItem("Plain");
             }
             
-            // Set colors
             fontColorChooser.setColor(textArea.getForeground());
             backgroundColorChooser.setColor(textArea.getBackground());
         }
@@ -247,17 +221,16 @@ public class EditorSettingsWindow extends JFrame {
         int fontStyle = Font.PLAIN;
         String selectedStyle = (String) fontStyleCombo.getSelectedItem();
         
-        if (boldCheck.isSelected() || selectedStyle.contains("Bold")) {
+        if (selectedStyle.contains("Bold")) {
             fontStyle |= Font.BOLD;
         }
-        if (italicCheck.isSelected() || selectedStyle.contains("Italic")) {
+        if (selectedStyle.contains("Italic")) {
             fontStyle |= Font.ITALIC;
         }
         
         Font newFont = new Font(fontFamily, fontStyle, fontSize);
         textArea.setFont(newFont);
         
-        // Update checkboxes based on combo selection
         if (selectedStyle.contains("Bold")) {
             boldCheck.setSelected(true);
         } else {
@@ -285,7 +258,7 @@ public class EditorSettingsWindow extends JFrame {
     }
     
     private void resetToDefaults() {
-        fontFamilyCombo.setSelectedItem("Monospaced");
+        fontFamilyCombo.setSelectedItem("Consolas");
         fontStyleCombo.setSelectedItem("Plain");
         fontSizeSlider.setValue(16);
         fontSizeLabel.setText("16");
